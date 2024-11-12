@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat App</title>
+    <style>
+        
+        #chat-box {
+            width: 400px;
+            height: 500px;
+            border: 1px solid #ccc;
+            overflow-y: scroll;
+            padding: 10px;
+            background-color: #f9f9f9;
+            margin-bottom: 20px;
+        }
+        #user-input {
+            width: 100%;
+            padding: 10px;
+            margin-top: 10px;
+        }
+
+        .message {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .warning {
+            background-color: #f8d7da;
+            color: #721c24;
+            padding: 5px;
+            border-radius: 5px;
+            margin-top: 5px;
+            font-size: 0.9em;
+        }
+        .user { background-color: #d1e7ff; }
+        .bot { background-color: #e8f5e9; }
+    </style>
+</head>
+<body>
+    <div id="chat-box"></div>
+    <input type="text" id="user-input" placeholder="Type a message" onkeyup="sendMessage(event)">
+    <button onclick="sendMessage(event)">Send</button>
+
+    
+    <script>
+        async function sendMessage(event) {
+            const input = document.getElementById('user-input');
+            const userMessage = input.value.trim();
+    
+            if (event.key === 'Enter' || event.type === 'click') {
+                if (!userMessage) return;
+    
+                // Display user message
+                const chatBox = document.getElementById('chat-box');
+                const userDiv = document.createElement('div');
+                userDiv.className = 'message user';
+                userDiv.textContent = "Sender: " + userMessage;
+                chatBox.appendChild(userDiv);
+    
+                // Clear input field
+                input.value = '';
+    
+                // Call the backend to process the message for malicious links on receiver side
+                const receiverMessage = await processMessageForReceiver(userMessage);
+    
+                // Display the processed message from the receiver's side
+                const botDiv = document.createElement('div');
+                botDiv.className = 'message bot';
+                botDiv.innerHTML = "Receiver: " + receiverMessage;
+                chatBox.appendChild(botDiv);
+    
+                // Scroll to the bottom of chat
+                chatBox.scrollTop = chatBox.scrollHeight;
+            }
+        }
+    
+        async function processMessageForReceiver(message) {
+            const url = extractUrl(message);
+    
+            if (url) {
+                try {
+                    // Call the Flask API to check if the URL is safe
+                    const response = await fetch('http://localhost:5000/predict', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ url })
+                    });
+                    const data = await response.json();
+    
+                    // If the URL is safe, keep it as a clickable hyperlink
+                    if (data.prediction.toLowerCase() === "safe.") {
+                        return message.replace(url, `<a href="${url}" target="_blank">${url}</a>`);
+                    } else {
+                        // If phishing, display the URL as plain text and add a warning message
+                        const sanitizedUrl = url.replace(/</g, "&lt;").replace(/>/g, "&gt;"); // Basic HTML sanitization
+                        return `${message.replace(url, sanitizedUrl)}<div class="warning">Warning: Malicious link detected!</div>`;
+                    }
+                } catch (error) {
+                    console.error("API error:", error);
+                    return message;
+                }
+            }
+            return message;  // If no URL, return the message unchanged
+        }
+    
+        function extractUrl(text) {
+            const urlPattern = /(https?:\/\/[^\s]+)/g;
+            const match = text.match(urlPattern);
+            return match ? match[0] : null;
+        }
+    </script>
+    
+    
+</body>
+</html>
